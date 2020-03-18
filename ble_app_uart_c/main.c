@@ -24,7 +24,7 @@
  *
  * 5. Any software provided in binary form under this license must not be reverse
  *    engineered, decompiled, modified and/or disassembled.
- *
+ *                               
  * THIS SOFTWARE IS PROVIDED BY NORDIC SEMICONDUCTOR ASA "AS IS" AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
  * OF MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -62,6 +62,7 @@
 #include "nrf_log_ctrl.h"
 #include "nrf_log_default_backends.h"
 
+#include "nrfx_timer.h"
 
 #define APP_BLE_CONN_CFG_TAG    1                                       /**< Tag that refers to the BLE stack configuration set with @ref sd_ble_cfg_set. The default tag is @ref BLE_CONN_CFG_TAG_DEFAULT. */
 #define APP_BLE_OBSERVER_PRIO   3                                       /**< BLE observer priority of the application. There is no need to modify this value. */
@@ -71,7 +72,7 @@
 
 #define NUS_SERVICE_UUID_TYPE   BLE_UUID_TYPE_VENDOR_BEGIN              /**< UUID type for the Nordic UART Service (vendor specific). */
 
-#define ECHOBACK_BLE_UART_DATA  1                                       /**< Echo the UART data that is received over the Nordic UART Service (NUS) back to the sender. */
+#define ECHOBACK_BLE_UART_DATA  0                                       /**< Echo the UART data that is received over the Nordic UART Service (NUS) back to the sender. */
 
 
 BLE_NUS_C_DEF(m_ble_nus_c);                                             /**< BLE Nordic UART Service (NUS) client instance. */
@@ -81,6 +82,12 @@ NRF_BLE_SCAN_DEF(m_scan);                                               /**< Sca
 NRF_BLE_GQ_DEF(m_ble_gatt_queue,                                        /**< BLE GATT Queue instance. */
                NRF_SDH_BLE_CENTRAL_LINK_COUNT,
                NRF_BLE_GQ_QUEUE_SIZE);
+
+
+const nrfx_timer_t timestamp_timer = NRFX_TIMER_INSTANCE(1);                        /** Timer used to generate time stamps*/
+const nrfx_timer_t inactivity_timer = NRFX_TIMER_INSTANCE(2);           /** Timer used to generate UART inactivity interrupt */
+static uint32_t time_last_received_byte_uart;                                       /** Counter value from timestamp_timer  */
+static bool inactivity_timeout;                                         /** Bool signaling too long UART inactivity from last received byte  */
 
 static uint16_t m_ble_nus_max_data_len = BLE_GATT_ATT_MTU_DEFAULT - OPCODE_LENGTH - HANDLE_LENGTH; /**< Maximum length of data (in bytes) that can be transmitted to the peer by the Nordic UART service module. */
 
@@ -108,6 +115,56 @@ void assert_nrf_callback(uint16_t line_num, const uint8_t * p_file_name)
     app_error_handler(0xDEADBEEF, line_num, p_file_name);
 }
 
+
+
+static void dummy_handler(nrf_timer_event_t event_type, void* p_context){
+    //printf("dummy_handler");
+}
+
+void timestamp_timer_config(void)
+{ 
+	uint32_t err_code = NRF_SUCCESS;
+	nrfx_timer_config_t timer_cfg = NRFX_TIMER_DEFAULT_CONFIG;
+	
+    err_code = nrfx_timer_init(&timestamp_timer, &timer_cfg, dummy_handler);
+	APP_ERROR_CHECK(err_code);
+    
+    nrfx_timer_enable(&timestamp_timer);
+}
+
+// Timestamp function for logging
+uint32_t timestamp_us(void)
+{
+	uint32_t time = nrfx_timer_capture(&timestamp_timer, NRF_TIMER_CC_CHANNEL0);
+	return time;
+}
+
+static void inactivity_timer_handler(nrf_timer_event_t event_type, void* p_context){
+    switch(event_type)
+    {
+        case NRF_TIMER_EVENT_COMPARE0:
+            inactivity_timeout = true; 
+    }
+}
+
+
+void inactivity_timer_config(void)
+{
+	uint32_t err_code = NRF_SUCCESS;
+	nrfx_timer_config_t timer_cfg = NRFX_TIMER_DEFAULT_CONFIG;
+	
+    err_code = nrfx_timer_init(&inactivity_timer, &timer_cfg, inactivity_timer_handler);
+	APP_ERROR_CHECK(err_code);
+
+    nrfx_timer_compare(&inactivity_timer, NRF_TIMER_CC_CHANNEL0, 125, true);
+    
+    nrfx_timer_enable(&inactivity_timer);
+    
+    nrfx_timer_pause(&inactivity_timer);
+
+    nrfx_timer_clear(&inactivity_timer);
+    
+}
 
 /**@brief Function for handling the Nordic UART Service Client errors.
  *
@@ -219,7 +276,7 @@ static void ble_nus_chars_received_uart_print(uint8_t * p_data, uint16_t data_le
 {
     ret_code_t ret_val;
 
-    NRF_LOG_DEBUG("Receiving data.");
+    NRF_LOG_DEBUG("Receiving data, num bytes: %d.", data_len);
     NRF_LOG_HEXDUMP_DEBUG(p_data, data_len);
 
     for (uint32_t i = 0; i < data_len; i++)
@@ -271,13 +328,16 @@ void uart_event_handle(app_uart_evt_t * p_event)
         /**@snippet [Handling data from UART] */
         case APP_UART_DATA_READY:
             UNUSED_VARIABLE(app_uart_get(&data_array[index]));
-            index++;
-
-            if ((data_array[index - 1] == '\n') ||
-                (data_array[index - 1] == '\r') ||
-                (index >= (m_ble_nus_max_data_len)))
+            if(index++ == 0)
             {
-                NRF_LOG_DEBUG("Ready to send data over BLE NUS");
+                nrfx_timer_resume(&inactivity_timer);
+            }
+            // Clear inactivity timer each time a new byte arrives
+            nrfx_timer_clear(&inactivity_timer);
+
+            if (index >= m_ble_nus_max_data_len)
+            {
+                NRF_LOG_INFO("Received %d bytes from UART, ready to send over BLE NUS, buffer full\r\n", index);
                 NRF_LOG_HEXDUMP_DEBUG(data_array, index);
 
                 do
@@ -291,6 +351,24 @@ void uart_event_handle(app_uart_evt_t * p_event)
 
                 index = 0;
             }
+            break;
+        case APP_UART_DATA:
+            NRF_LOG_INFO("Received %d bytes from UART, ready to send over BLE NUS, inactivity timeout\r\n", index);
+            NRF_LOG_HEXDUMP_DEBUG(data_array, index);
+
+            do
+            {
+                ret_val = ble_nus_c_string_send(&m_ble_nus_c, data_array, index);
+                if ( (ret_val != NRF_ERROR_INVALID_STATE) && (ret_val != NRF_ERROR_RESOURCES) )
+                {
+                    APP_ERROR_CHECK(ret_val);
+                }
+            } while (ret_val == NRF_ERROR_RESOURCES);
+
+            inactivity_timeout = false;
+            nrfx_timer_pause(&inactivity_timer);
+            nrfx_timer_clear(&inactivity_timer);
+            index = 0;
             break;
 
         /**@snippet [Handling data from UART] */
@@ -429,13 +507,34 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
             APP_ERROR_CHECK(err_code);
             break;
 
+        case BLE_GAP_EVT_PHY_UPDATE:
+        {
+            ble_gap_evt_phy_update_t const * p_phy_evt = &p_ble_evt->evt.gap_evt.params.phy_update;
+
+            if (p_phy_evt->status == BLE_HCI_STATUS_CODE_LMP_ERROR_TRANSACTION_COLLISION)
+            {
+                // Ignore LL collisions.
+                NRF_LOG_DEBUG("LL transaction collision during PHY update.");
+                break;
+            }
+
+            ble_gap_phys_t phys = {0};
+            phys.tx_phys = p_phy_evt->tx_phy;
+            phys.rx_phys = p_phy_evt->rx_phy;
+            NRF_LOG_INFO("PHY update %s. PHY set to %d.",
+                         (p_phy_evt->status == BLE_HCI_STATUS_CODE_SUCCESS) ?
+                         "accepted" : "rejected",
+                         p_phy_evt->tx_phy);
+            break;
+
+        }
         case BLE_GAP_EVT_PHY_UPDATE_REQUEST:
         {
             NRF_LOG_DEBUG("PHY update request.");
             ble_gap_phys_t const phys =
             {
-                .rx_phys = BLE_GAP_PHY_AUTO,
-                .tx_phys = BLE_GAP_PHY_AUTO,
+                .rx_phys = BLE_GAP_PHY_2MBPS,
+                .tx_phys = BLE_GAP_PHY_2MBPS,
             };
             err_code = sd_ble_gap_phy_update(p_ble_evt->evt.gap_evt.conn_handle, &phys);
             APP_ERROR_CHECK(err_code);
@@ -609,7 +708,7 @@ static void timer_init(void)
 /**@brief Function for initializing the nrf log module. */
 static void log_init(void)
 {
-    ret_code_t err_code = NRF_LOG_INIT(NULL);
+    ret_code_t err_code = NRF_LOG_INIT(timestamp_us);
     APP_ERROR_CHECK(err_code);
 
     NRF_LOG_DEFAULT_BACKENDS_INIT();
@@ -657,6 +756,8 @@ static void idle_state_handle(void)
 int main(void)
 {
     // Initialize.
+    timestamp_timer_config();
+    inactivity_timer_config();
     log_init();
     timer_init();
     uart_init();
@@ -669,13 +770,20 @@ int main(void)
     scan_init();
 
     // Start execution.
-    printf("BLE UART central example started.\r\n");
-    NRF_LOG_INFO("BLE UART central example started.");
+    printf("\r\nBLE UART central started.\r\n");
+    NRF_LOG_INFO("Debug logging for BLE UART central over RTT started.");
     scan_start();
 
+    app_uart_evt_t uart_timeout;
+    uart_timeout.evt_type = APP_UART_DATA;
+    inactivity_timeout = false;
     // Enter main loop.
     for (;;)
     {
+        if(inactivity_timeout)
+        {
+            uart_event_handle(&uart_timeout);
+        }
         idle_state_handle();
     }
 }
