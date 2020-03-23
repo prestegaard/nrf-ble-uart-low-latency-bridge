@@ -3808,7 +3808,7 @@
 // <e> NRFX_TIMER_ENABLED - nrfx_timer - TIMER periperal driver
 //==========================================================
 #ifndef NRFX_TIMER_ENABLED
-#define NRFX_TIMER_ENABLED 0
+#define NRFX_TIMER_ENABLED 1
 #endif
 // <q> NRFX_TIMER0_ENABLED  - Enable TIMER0 instance
  
@@ -3821,14 +3821,14 @@
  
 
 #ifndef NRFX_TIMER1_ENABLED
-#define NRFX_TIMER1_ENABLED 0
+#define NRFX_TIMER1_ENABLED 1
 #endif
 
 // <q> NRFX_TIMER2_ENABLED  - Enable TIMER2 instance
  
 
 #ifndef NRFX_TIMER2_ENABLED
-#define NRFX_TIMER2_ENABLED 0
+#define NRFX_TIMER2_ENABLED 1
 #endif
 
 // <q> NRFX_TIMER3_ENABLED  - Enable TIMER3 instance
@@ -3859,7 +3859,7 @@
 // <9=> 31.25 kHz 
 
 #ifndef NRFX_TIMER_DEFAULT_CONFIG_FREQUENCY
-#define NRFX_TIMER_DEFAULT_CONFIG_FREQUENCY 0
+#define NRFX_TIMER_DEFAULT_CONFIG_FREQUENCY 7
 #endif
 
 // <o> NRFX_TIMER_DEFAULT_CONFIG_MODE  - Timer mode or operation
@@ -3879,7 +3879,7 @@
 // <3=> 32 bit 
 
 #ifndef NRFX_TIMER_DEFAULT_CONFIG_BIT_WIDTH
-#define NRFX_TIMER_DEFAULT_CONFIG_BIT_WIDTH 0
+#define NRFX_TIMER_DEFAULT_CONFIG_BIT_WIDTH 3
 #endif
 
 // <o> NRFX_TIMER_DEFAULT_CONFIG_IRQ_PRIORITY  - Interrupt priority
@@ -5516,101 +5516,101 @@
 
 // </e>
 
-// <e> TIMER_ENABLED - nrf_drv_timer - TIMER periperal driver - legacy layer
-//==========================================================
-#ifndef TIMER_ENABLED
-#define TIMER_ENABLED 0
-#endif
-// <o> TIMER_DEFAULT_CONFIG_FREQUENCY  - Timer frequency if in Timer mode
+// // <e> TIMER_ENABLED - nrf_drv_timer - TIMER periperal driver - legacy layer
+// //==========================================================
+// #ifndef TIMER_ENABLED
+// #define TIMER_ENABLED 0
+// #endif
+// // <o> TIMER_DEFAULT_CONFIG_FREQUENCY  - Timer frequency if in Timer mode
  
-// <0=> 16 MHz 
-// <1=> 8 MHz 
-// <2=> 4 MHz 
-// <3=> 2 MHz 
-// <4=> 1 MHz 
-// <5=> 500 kHz 
-// <6=> 250 kHz 
-// <7=> 125 kHz 
-// <8=> 62.5 kHz 
-// <9=> 31.25 kHz 
+// // <0=> 16 MHz 
+// // <1=> 8 MHz 
+// // <2=> 4 MHz 
+// // <3=> 2 MHz 
+// // <4=> 1 MHz 
+// // <5=> 500 kHz 
+// // <6=> 250 kHz 
+// // <7=> 125 kHz 
+// // <8=> 62.5 kHz 
+// // <9=> 31.25 kHz 
 
-#ifndef TIMER_DEFAULT_CONFIG_FREQUENCY
-#define TIMER_DEFAULT_CONFIG_FREQUENCY 0
-#endif
+// #ifndef TIMER_DEFAULT_CONFIG_FREQUENCY
+// #define TIMER_DEFAULT_CONFIG_FREQUENCY 0
+// #endif
 
-// <o> TIMER_DEFAULT_CONFIG_MODE  - Timer mode or operation
+// // <o> TIMER_DEFAULT_CONFIG_MODE  - Timer mode or operation
  
-// <0=> Timer 
-// <1=> Counter 
+// // <0=> Timer 
+// // <1=> Counter 
 
-#ifndef TIMER_DEFAULT_CONFIG_MODE
-#define TIMER_DEFAULT_CONFIG_MODE 0
-#endif
+// #ifndef TIMER_DEFAULT_CONFIG_MODE
+// #define TIMER_DEFAULT_CONFIG_MODE 0
+// #endif
 
-// <o> TIMER_DEFAULT_CONFIG_BIT_WIDTH  - Timer counter bit width
+// // <o> TIMER_DEFAULT_CONFIG_BIT_WIDTH  - Timer counter bit width
  
-// <0=> 16 bit 
-// <1=> 8 bit 
-// <2=> 24 bit 
-// <3=> 32 bit 
+// // <0=> 16 bit 
+// // <1=> 8 bit 
+// // <2=> 24 bit 
+// // <3=> 32 bit 
 
-#ifndef TIMER_DEFAULT_CONFIG_BIT_WIDTH
-#define TIMER_DEFAULT_CONFIG_BIT_WIDTH 0
-#endif
+// #ifndef TIMER_DEFAULT_CONFIG_BIT_WIDTH
+// #define TIMER_DEFAULT_CONFIG_BIT_WIDTH 0
+// #endif
 
-// <o> TIMER_DEFAULT_CONFIG_IRQ_PRIORITY  - Interrupt priority
- 
-
-// <i> Priorities 0,2 (nRF51) and 0,1,4,5 (nRF52) are reserved for SoftDevice
-// <0=> 0 (highest) 
-// <1=> 1 
-// <2=> 2 
-// <3=> 3 
-// <4=> 4 
-// <5=> 5 
-// <6=> 6 
-// <7=> 7 
-
-#ifndef TIMER_DEFAULT_CONFIG_IRQ_PRIORITY
-#define TIMER_DEFAULT_CONFIG_IRQ_PRIORITY 6
-#endif
-
-// <q> TIMER0_ENABLED  - Enable TIMER0 instance
+// // <o> TIMER_DEFAULT_CONFIG_IRQ_PRIORITY  - Interrupt priority
  
 
-#ifndef TIMER0_ENABLED
-#define TIMER0_ENABLED 0
-#endif
+// // <i> Priorities 0,2 (nRF51) and 0,1,4,5 (nRF52) are reserved for SoftDevice
+// // <0=> 0 (highest) 
+// // <1=> 1 
+// // <2=> 2 
+// // <3=> 3 
+// // <4=> 4 
+// // <5=> 5 
+// // <6=> 6 
+// // <7=> 7 
 
-// <q> TIMER1_ENABLED  - Enable TIMER1 instance
+// #ifndef TIMER_DEFAULT_CONFIG_IRQ_PRIORITY
+// #define TIMER_DEFAULT_CONFIG_IRQ_PRIORITY 6
+// #endif
+
+// // <q> TIMER0_ENABLED  - Enable TIMER0 instance
  
 
-#ifndef TIMER1_ENABLED
-#define TIMER1_ENABLED 0
-#endif
+// #ifndef TIMER0_ENABLED
+// #define TIMER0_ENABLED 0
+// #endif
 
-// <q> TIMER2_ENABLED  - Enable TIMER2 instance
+// // <q> TIMER1_ENABLED  - Enable TIMER1 instance
  
 
-#ifndef TIMER2_ENABLED
-#define TIMER2_ENABLED 0
-#endif
+// #ifndef TIMER1_ENABLED
+// #define TIMER1_ENABLED 0
+// #endif
 
-// <q> TIMER3_ENABLED  - Enable TIMER3 instance
+// // <q> TIMER2_ENABLED  - Enable TIMER2 instance
  
 
-#ifndef TIMER3_ENABLED
-#define TIMER3_ENABLED 0
-#endif
+// #ifndef TIMER2_ENABLED
+// #define TIMER2_ENABLED 0
+// #endif
 
-// <q> TIMER4_ENABLED  - Enable TIMER4 instance
+// // <q> TIMER3_ENABLED  - Enable TIMER3 instance
  
 
-#ifndef TIMER4_ENABLED
-#define TIMER4_ENABLED 0
-#endif
+// #ifndef TIMER3_ENABLED
+// #define TIMER3_ENABLED 0
+// #endif
 
-// </e>
+// // <q> TIMER4_ENABLED  - Enable TIMER4 instance
+ 
+
+// #ifndef TIMER4_ENABLED
+// #define TIMER4_ENABLED 0
+// #endif
+
+// // </e>
 
 // <e> TWIS_ENABLED - nrf_drv_twis - TWIS peripheral driver - legacy layer
 //==========================================================
@@ -7596,7 +7596,7 @@
 // <i> a timestamp and up to 2 arguments in a single memory object.
 
 #ifndef NRF_LOG_MSGPOOL_ELEMENT_SIZE
-#define NRF_LOG_MSGPOOL_ELEMENT_SIZE 20
+#define NRF_LOG_MSGPOOL_ELEMENT_SIZE 32
 #endif
 
 // <o> NRF_LOG_MSGPOOL_ELEMENT_COUNT - Number of elements in the pool of memory objects 
@@ -7606,7 +7606,7 @@
 // <i> RAM memory usage.
 
 #ifndef NRF_LOG_MSGPOOL_ELEMENT_COUNT
-#define NRF_LOG_MSGPOOL_ELEMENT_COUNT 8
+#define NRF_LOG_MSGPOOL_ELEMENT_COUNT 16
 #endif
 
 // </h> 
@@ -7774,11 +7774,11 @@
 // <i> Function for getting the timestamp is provided by the user
 //==========================================================
 #ifndef NRF_LOG_USES_TIMESTAMP
-#define NRF_LOG_USES_TIMESTAMP 0
+#define NRF_LOG_USES_TIMESTAMP 1
 #endif
 // <o> NRF_LOG_TIMESTAMP_DEFAULT_FREQUENCY - Default frequency of the timestamp (in Hz) or 0 to use app_timer frequency. 
 #ifndef NRF_LOG_TIMESTAMP_DEFAULT_FREQUENCY
-#define NRF_LOG_TIMESTAMP_DEFAULT_FREQUENCY 0
+#define NRF_LOG_TIMESTAMP_DEFAULT_FREQUENCY 125000
 #endif
 
 // </e>
