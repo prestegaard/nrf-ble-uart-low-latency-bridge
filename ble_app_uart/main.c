@@ -627,6 +627,7 @@ void uart_event_handle(app_uart_evt_t * p_event)
             break;
 
         case APP_UART_DATA:
+            printf(data_array);
             NRF_LOG_INFO("Received %d bytes from UART, ready to send over BLE NUS, inactivity timeout\r\n", index);
             NRF_LOG_HEXDUMP_DEBUG(data_array, index);
             do
@@ -646,7 +647,25 @@ void uart_event_handle(app_uart_evt_t * p_event)
             break;
         
         case APP_UART_COMMUNICATION_ERROR:
-            APP_ERROR_HANDLER(p_event->data.error_communication);
+            NRF_LOG_ERROR("Communication error occurred while handling UART: %08X", p_event->data.error_communication );
+            if( p_event->data.error_communication & UART_ERRORSRC_BREAK_Msk )
+            {
+                NRF_LOG_ERROR("   Break");
+            }
+            if( p_event->data.error_communication & UART_ERRORSRC_FRAMING_Msk )
+            {
+                NRF_LOG_ERROR("   Framing");
+            }
+            if( p_event->data.error_communication & UART_ERRORSRC_PARITY_Msk )
+            {
+                NRF_LOG_ERROR("   Parity");
+            }
+            if( p_event->data.error_communication & UART_ERRORSRC_OVERRUN_Msk )
+            {
+                NRF_LOG_ERROR("   Overrun");
+            }
+            
+            // ### Ignore: APP_ERROR_HANDLER(p_event->data.error_communication);
             break;
 
         case APP_UART_FIFO_ERROR:
@@ -668,7 +687,7 @@ static void uart_init(void)
     uint32_t                     err_code;
     app_uart_comm_params_t const comm_params =
     {
-        .rx_pin_no    = RX_PIN_NUMBER,
+        .rx_pin_no    = 30,
         .tx_pin_no    = TX_PIN_NUMBER,
         .rts_pin_no   = RTS_PIN_NUMBER,
         .cts_pin_no   = CTS_PIN_NUMBER,
@@ -796,7 +815,7 @@ int main(void)
     log_init();
     timers_init();
     buttons_leds_init(&erase_bonds);
-    power_management_init();
+    power_management_init(); 
     ble_stack_init();
     gap_params_init();
     gatt_init();

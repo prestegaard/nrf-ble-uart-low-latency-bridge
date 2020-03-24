@@ -373,8 +373,25 @@ void uart_event_handle(app_uart_evt_t * p_event)
 
         /**@snippet [Handling data from UART] */
         case APP_UART_COMMUNICATION_ERROR:
-            NRF_LOG_ERROR("Communication error occurred while handling UART.");
-            APP_ERROR_HANDLER(p_event->data.error_communication);
+            NRF_LOG_ERROR("Communication error occurred while handling UART: %08X", p_event->data.error_communication );
+            if( p_event->data.error_communication & UART_ERRORSRC_BREAK_Msk )
+            {
+                NRF_LOG_ERROR("   Break");
+            }
+            if( p_event->data.error_communication & UART_ERRORSRC_FRAMING_Msk )
+            {
+                NRF_LOG_ERROR("   Framing");
+            }
+            if( p_event->data.error_communication & UART_ERRORSRC_PARITY_Msk )
+            {
+                NRF_LOG_ERROR("   Parity");
+            }
+            if( p_event->data.error_communication & UART_ERRORSRC_OVERRUN_Msk )
+            {
+                NRF_LOG_ERROR("   Overrun");
+            }
+            
+            // ### Ignore: APP_ERROR_HANDLER(p_event->data.error_communication);
             break;
 
         case APP_UART_FIFO_ERROR:
