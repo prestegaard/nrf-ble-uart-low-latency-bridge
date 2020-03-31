@@ -13,6 +13,11 @@ The system currently uses baudrate 250000, but this could be tuned based what pa
 ## Tune to increase performance
 This setup is not battery optimized, nor fully latency optimized. To reduce latency further it is posible to increase the baudrate, one could also concider to include HW flow control to increase response time instead of the libuarte async timeout. 
 
+To inrease performance even slightly more, disable logging in the projects sdk_config.h
+```
+#define NRF_LOG_ENABLED 0
+```
+
 ![](overview.svg)
 
 ## Test system latency
