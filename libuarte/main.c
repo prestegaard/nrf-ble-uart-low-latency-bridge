@@ -332,7 +332,7 @@ int main(void)
     nrf_libuarte_async_config_t nrf_libuarte_async_config_peripheral = {
             .tx_pin     = TX_PIN_NUMBER_PERIPHERAL,
             .rx_pin     = RX_PIN_NUMBER_PERIPHERAL,
-            .baudrate   = UARTE_BAUDRATE_BAUDRATE_Baud250000,
+            .baudrate   = UARTE_BAUDRATE_BAUDRATE_Baud1M,
             .parity     = NRF_UARTE_PARITY_EXCLUDED,
             .hwfc       = NRF_UARTE_HWFC_DISABLED,
             .timeout_us = 100,
@@ -343,7 +343,7 @@ int main(void)
     nrf_libuarte_async_config_t nrf_libuarte_async_config_central = {
             .tx_pin     = TX_PIN_NUMBER_CENTRAL,
             .rx_pin     = RX_PIN_NUMBER_CENTRAL,
-            .baudrate   = UARTE_BAUDRATE_BAUDRATE_Baud250000,
+            .baudrate   = UARTE_BAUDRATE_BAUDRATE_Baud1M,
             .parity     = NRF_UARTE_PARITY_EXCLUDED,
             .hwfc       = NRF_UARTE_HWFC_DISABLED,
             .timeout_us = 100,

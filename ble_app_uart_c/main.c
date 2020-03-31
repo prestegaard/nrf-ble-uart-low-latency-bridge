@@ -597,7 +597,7 @@ static void uart_init(void)
     nrf_libuarte_async_config_t nrf_libuarte_async_config = {
             .tx_pin     = TX_PIN_NUMBER,
             .rx_pin     = RX_PIN_NUMBER,
-            .baudrate   = UARTE_BAUDRATE_BAUDRATE_Baud250000,
+            .baudrate   = UARTE_BAUDRATE_BAUDRATE_Baud1M,
             .parity     = NRF_UARTE_PARITY_EXCLUDED,
             .hwfc       = NRF_UARTE_HWFC_DISABLED,
             .timeout_us = 100,

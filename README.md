@@ -8,10 +8,10 @@ The FW provided in this repository is based on examples from the nRF SDK v16.0.0
 * libuarte example for UART handling, and the nRF 52 round trip time tester (see below)
 
 Hardware flow control is not used for UART handling.
-The system currently uses baudrate 250000, but this could be tuned based what partner UART device supports. The nRF52 supports up to 1M baud. 
+The system currently uses baudrate 1M (1000000).
 
 ## Tune to increase performance
-This setup is not battery optimized, nor fully latency optimized. To reduce latency further it is posible to increase the baudrate, one could also concider to include HW flow control to increase response time instead of the libuarte async timeout. 
+This setup is not battery optimized, nor fully latency optimized. One could concider to include HW flow control to increase response time instead of the libuarte async timeout. 
 
 To inrease performance even slightly more, disable logging in the projects sdk_config.h
 ```
