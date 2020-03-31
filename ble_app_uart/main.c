@@ -57,6 +57,7 @@
 #include "ble_advdata.h"
 #include "ble_advertising.h"
 #include "ble_conn_params.h"
+#include "nrf_drv_clock.h"
 #include "nrf_sdh.h"
 #include "nrf_sdh_soc.h"
 #include "nrf_sdh_ble.h"
@@ -120,8 +121,8 @@ static bool inactivity_timeout;                                                 
 
 static uint16_t   m_conn_handle          = BLE_CONN_HANDLE_INVALID;                 /**< Handle of the current connection. */
 static uint16_t   m_ble_nus_max_data_len = NRF_SDH_BLE_GATT_MAX_MTU_SIZE - 3;            /**< Maximum length of data (in bytes) that can be transmitted to the peer by the Nordic UART service module. */
-static volatile uint8_t message[244];
-static volatile uint8_t message_index;
+static uint8_t message[244];
+static uint16_t message_index; //uint16_t to be compatible with ble_nus
 static volatile uint8_t nus_message[10][100];
 static ble_uuid_t m_adv_uuids[]          =                                          /**< Universally unique service identifier. */
 {
