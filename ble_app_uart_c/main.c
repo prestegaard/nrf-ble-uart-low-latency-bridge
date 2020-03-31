@@ -87,9 +87,9 @@ NRF_LIBUARTE_ASYNC_DEFINE(libuarte, 0, 2, NRF_LIBUARTE_PERIPHERAL_NOT_USED, 3, L
 
 const nrfx_timer_t timestamp_timer = NRFX_TIMER_INSTANCE(1);                        /** Timer used to generate time stamps*/
 static bool inactivity_timeout;                                         /** Bool signaling too long UART inactivity from last received byte  */
-static volatile uint8_t message[244];
-static volatile uint8_t message_index;
-static volatile uint8_t nus_message[10][100];
+static uint8_t message[244];
+static uint8_t message_index;
+static uint8_t nus_message[10][100];
 static uint16_t m_ble_nus_max_data_len = BLE_GATT_ATT_MTU_DEFAULT - OPCODE_LENGTH - HANDLE_LENGTH; /**< Maximum length of data (in bytes) that can be transmitted to the peer by the Nordic UART service module. */
 
 /**@brief NUS UUID. */
@@ -260,12 +260,8 @@ void uart_event_handler(void * context, nrf_libuarte_async_evt_t * p_evt)
 {
     nrf_libuarte_async_t * p_libuarte = (nrf_libuarte_async_t *)context;
     ret_code_t ret;
-    uint16_t length;
-    
-
     switch (p_evt->type)
     {
-        ret_code_t err_code;
         case NRF_LIBUARTE_ASYNC_EVT_ERROR:
             bsp_board_led_invert(3);
             NRF_LOG_ERROR("NRF_LIBUARTE_ASYNC_EVT_ERROR");
@@ -707,7 +703,6 @@ int main(void)
     timer_init();
     uart_init();
 
-    ret_code_t ret;
     buttons_leds_init();
     db_discovery_init();
     power_management_init();
