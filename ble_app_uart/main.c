@@ -250,13 +250,10 @@ static void nus_data_handler(ble_nus_evt_t * p_evt)
             nus_message[nus_message_index][i] = p_evt->params.rx_data.p_data[i];
         }
         err_code = nrf_libuarte_async_tx(&libuarte, nus_message[nus_message_index], msg_len);
-        // err_code = nrf_libuarte_async_tx(&libuarte, p_evt->params.rx_data.p_data, p_evt->params.rx_data.length);
         if (err_code == NRF_ERROR_BUSY)
         {
             NRF_LOG_ERROR("UART TX ERROR BUSY");
             buffer_t buf = {
-                // .p_data = p_evt->params.rx_data.p_data,
-                // .length = p_evt->params.rx_data.length,
                 .p_data = nus_message[nus_message_index],
                 .length = msg_len,
             };
