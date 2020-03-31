@@ -70,13 +70,14 @@
 #include "nrf_pwr_mgmt.h"
 //#include "nrf_drv_timer.h"
 #include "nrfx_timer.h"
+#include "nrf_libuarte_async.h"
 
-#if defined (UART_PRESENT)
-#include "nrf_uart.h"
-#endif
-#if defined (UARTE_PRESENT)
-#include "nrf_uarte.h"
-#endif
+// #if defined (UART_PRESENT)
+// #include "nrf_uart.h"
+// #endif
+// #if defined (UARTE_PRESENT)
+// #include "nrf_uarte.h"
+// #endif
 
 #include "nrf_log.h"
 #include "nrf_log_ctrl.h"
@@ -103,8 +104,7 @@
 
 #define DEAD_BEEF                       0xDEADBEEF                                  /**< Value used as error code on stack dump, can be used to identify stack location on stack unwind. */
 
-#define UART_TX_BUF_SIZE                256                                         /**< UART TX buffer size. */
-#define UART_RX_BUF_SIZE                256                                         /**< UART RX buffer size. */
+#define LIBUARTE_RX_BUFFER_SIZE         100
 
 
 BLE_NUS_DEF(m_nus, NRF_SDH_BLE_TOTAL_LINK_COUNT);                                   /**< BLE NUS service instance. */
@@ -112,19 +112,28 @@ NRF_BLE_GATT_DEF(m_gatt);                                                       
 NRF_BLE_QWR_DEF(m_qwr);                                                             /**< Context for the Queued Write module.*/
 BLE_ADVERTISING_DEF(m_advertising);                                                 /**< Advertising module instance. */
 
+NRF_LIBUARTE_ASYNC_DEFINE(libuarte, 0, 2, NRF_LIBUARTE_PERIPHERAL_NOT_USED, 3, LIBUARTE_RX_BUFFER_SIZE, 3);
 
 const nrfx_timer_t timestamp_timer = NRFX_TIMER_INSTANCE(1);                        /** Timer used to generate time stamps*/
-const nrfx_timer_t inactivity_timer = NRFX_TIMER_INSTANCE(2);                       /** Timer used to generate UART inactivity interrupt */
-static uint32_t time_last_received_byte_uart;                                       /** Counter value from timestamp_timer  */
+// const nrfx_timer_t inactivity_timer = NRFX_TIMER_INSTANCE(2);                       /** Timer used to generate UART inactivity interrupt */
 static bool inactivity_timeout;                                                     /** Bool signaling too long UART inactivity from last received byte  */
 
 static uint16_t   m_conn_handle          = BLE_CONN_HANDLE_INVALID;                 /**< Handle of the current connection. */
-static uint16_t   m_ble_nus_max_data_len = 100; //NRF_SDH_BLE_GATT_MAX_MTU_SIZE - 3;            /**< Maximum length of data (in bytes) that can be transmitted to the peer by the Nordic UART service module. */
+static uint16_t   m_ble_nus_max_data_len = NRF_SDH_BLE_GATT_MAX_MTU_SIZE - 3;            /**< Maximum length of data (in bytes) that can be transmitted to the peer by the Nordic UART service module. */
+static volatile uint8_t message[244];
+static volatile uint8_t message_index;
+static volatile uint8_t nus_message[10][100];
 static ble_uuid_t m_adv_uuids[]          =                                          /**< Universally unique service identifier. */
 {
     {BLE_UUID_NUS_SERVICE, NUS_SERVICE_UUID_TYPE}
 };
 
+typedef struct {
+    uint8_t * p_data;
+    uint32_t length;
+} buffer_t;
+
+NRF_QUEUE_DEF(buffer_t, m_buf_queue, 10, NRF_QUEUE_MODE_NO_OVERFLOW);
 
 /**@brief Function for assert macro callback.
  *
@@ -152,7 +161,8 @@ void timestamp_timer_config(void)
 { 
 	uint32_t err_code = NRF_SUCCESS;
 	nrfx_timer_config_t timer_cfg = NRFX_TIMER_DEFAULT_CONFIG;
-	
+    timer_cfg.frequency = NRF_TIMER_FREQ_125kHz;
+
     err_code = nrfx_timer_init(&timestamp_timer, &timer_cfg, dummy_handler);
 	APP_ERROR_CHECK(err_code);
     
@@ -164,34 +174,6 @@ uint32_t timestamp_us(void)
 {
 	uint32_t time = nrfx_timer_capture(&timestamp_timer, NRF_TIMER_CC_CHANNEL0);
 	return time;
-}
-
-
-static void inactivity_timer_handler(nrf_timer_event_t event_type, void* p_context){
-    switch(event_type)
-    {
-        case NRF_TIMER_EVENT_COMPARE0:
-            inactivity_timeout = true; 
-    }
-}
-
-
-void inactivity_timer_config(void)
-{
-	uint32_t err_code = NRF_SUCCESS;
-	nrfx_timer_config_t timer_cfg = NRFX_TIMER_DEFAULT_CONFIG;
-	
-    err_code = nrfx_timer_init(&inactivity_timer, &timer_cfg, inactivity_timer_handler);
-	APP_ERROR_CHECK(err_code);
-
-    nrfx_timer_compare(&inactivity_timer, NRF_TIMER_CC_CHANNEL0, 125, true);
-    
-    nrfx_timer_enable(&inactivity_timer);
-    
-    nrfx_timer_pause(&inactivity_timer);
-
-    nrfx_timer_clear(&inactivity_timer);
-    
 }
 
 
@@ -255,35 +237,35 @@ static void nrf_qwr_error_handler(uint32_t nrf_error)
  */
 /**@snippet [Handling the data received over BLE] */
 static void nus_data_handler(ble_nus_evt_t * p_evt)
-{
-
+{   
+    static uint8_t nus_message_index = 0;
     if (p_evt->type == BLE_NUS_EVT_RX_DATA)
     {
         uint32_t err_code;
-
-        NRF_LOG_INFO("Received %d bytes from BLE NUS. Writing data on UART.", p_evt->params.rx_data.length);
-        NRF_LOG_FLUSH();
-        NRF_LOG_HEXDUMP_DEBUG(p_evt->params.rx_data.p_data, p_evt->params.rx_data.length);
-        
-        //printf("** Received %d bytes from BLE NUS, ready to send over UART, timestamp [ms]: %d\r\n", p_evt->params.rx_data.length, timestamp_us()/125);
-        NRF_LOG_INFO("** Round trip time: end of UART RX <-> BLE return [ms]: %d\r\n", (timestamp_us()/125 - time_last_received_byte_uart));
-        // printf("** BLE round trip time [ms]: %d\r\n", (timestamp_us()/125 - time_last_received_byte_uart));
-        for (uint32_t i = 0; i < p_evt->params.rx_data.length; i++)
+        NRF_LOG_INFO("Received %d bytes from BLE NUS", p_evt->params.rx_data.length);
+        uint8_t msg_len = (p_evt->params.rx_data.length > LIBUARTE_RX_BUFFER_SIZE ) ? LIBUARTE_RX_BUFFER_SIZE : p_evt->params.rx_data.length;
+        for(uint8_t i=0; i<msg_len; i++)
         {
-            do
-            {
-                err_code = app_uart_put(p_evt->params.rx_data.p_data[i]);
-                if ((err_code != NRF_SUCCESS) && (err_code != NRF_ERROR_BUSY))
-                {
-                    NRF_LOG_ERROR("Failed receiving NUS message. Error 0x%x. ", err_code);
-                    APP_ERROR_CHECK(err_code);
-                }
-            } while (err_code == NRF_ERROR_BUSY);
+            nus_message[nus_message_index][i] = p_evt->params.rx_data.p_data[i];
         }
-        if (p_evt->params.rx_data.p_data[p_evt->params.rx_data.length - 1] == '\r')
+        err_code = nrf_libuarte_async_tx(&libuarte, nus_message[nus_message_index], msg_len);
+        // err_code = nrf_libuarte_async_tx(&libuarte, p_evt->params.rx_data.p_data, p_evt->params.rx_data.length);
+        if (err_code == NRF_ERROR_BUSY)
         {
-            while (app_uart_put('\n') == NRF_ERROR_BUSY);
+            NRF_LOG_ERROR("UART TX ERROR BUSY");
+            buffer_t buf = {
+                // .p_data = p_evt->params.rx_data.p_data,
+                // .length = p_evt->params.rx_data.length,
+                .p_data = nus_message[nus_message_index],
+                .length = msg_len,
+            };
+            err_code = nrf_queue_push(&m_buf_queue, &buf);
+            APP_ERROR_CHECK(err_code);
         }
+        if(++nus_message_index == 10)
+        {
+            nus_message_index = 0;
+        }         
     }
 
 }
@@ -584,99 +566,73 @@ void bsp_event_handler(bsp_event_t event)
 }
 
 
-/**@brief   Function for handling app_uart events.
+/**@brief   Function for handling uart events.
  *
- * @details This function will receive a single character from the app_uart module and append it to
- *          a string. The string will be be sent over BLE when the last character received was a
- *          'new line' '\n' (hex 0x0A) or if the string has reached the maximum data length.
+ *
  */
 /**@snippet [Handling the data received over UART] */
-void uart_event_handle(app_uart_evt_t * p_event)
+void uart_event_handler(void * context, nrf_libuarte_async_evt_t * p_evt)
 {
-    static uint8_t data_array[BLE_NUS_MAX_DATA_LEN];
-    static uint16_t index = 0;
-    uint32_t       err_code;
+    nrf_libuarte_async_t * p_libuarte = (nrf_libuarte_async_t *)context;
+    ret_code_t ret;
+    uint16_t length;
+    
 
-    switch (p_event->evt_type)
+    switch (p_evt->type)
     {
-        case APP_UART_DATA_READY:
-            UNUSED_VARIABLE(app_uart_get(&data_array[index]));
-            if(index++ == 0)
-            {
-                nrfx_timer_resume(&inactivity_timer);
-            }
-            // Clear inactivity timer each time a new byte arrives
-            nrfx_timer_clear(&inactivity_timer);
-
-            if (index >= m_ble_nus_max_data_len)
-            {
-                NRF_LOG_INFO("Received %d bytes from UART, ready to send over BLE NUS, buffer full\r\n", index);
-                NRF_LOG_HEXDUMP_DEBUG(data_array, index);
-                do
-                {
-                    err_code = ble_nus_data_send(&m_nus, data_array, &index, m_conn_handle);
-                    if ((err_code != NRF_ERROR_INVALID_STATE) &&
-                        (err_code != NRF_ERROR_RESOURCES) &&
-                        (err_code != NRF_ERROR_NOT_FOUND))
-                    {
-                        APP_ERROR_CHECK(err_code);
-                    }
-                } while (err_code == NRF_ERROR_RESOURCES);
-                index = 0;
-            }
+        ret_code_t err_code;
+        case NRF_LIBUARTE_ASYNC_EVT_ERROR:
+            bsp_board_led_invert(3);
+            NRF_LOG_ERROR("NRF_LIBUARTE_ASYNC_EVT_ERROR");
             break;
-
-        case APP_UART_DATA:
-            printf(data_array);
-            NRF_LOG_INFO("Received %d bytes from UART, ready to send over BLE NUS, inactivity timeout\r\n", index);
-            NRF_LOG_HEXDUMP_DEBUG(data_array, index);
-            do
-            {   
-                err_code = ble_nus_data_send(&m_nus, data_array, &index, m_conn_handle);
-                if ((err_code != NRF_ERROR_INVALID_STATE) &&
-                    (err_code != NRF_ERROR_RESOURCES) &&
-                    (err_code != NRF_ERROR_NOT_FOUND))
-                {
-                    APP_ERROR_CHECK(err_code);
-                }
-            } while (err_code == NRF_ERROR_RESOURCES);
-            inactivity_timeout = false;
-            nrfx_timer_pause(&inactivity_timer);
-            nrfx_timer_clear(&inactivity_timer);
-            index = 0;
-            break;
-        
-        case APP_UART_COMMUNICATION_ERROR:
-            NRF_LOG_ERROR("Communication error occurred while handling UART: %08X", p_event->data.error_communication );
-            if( p_event->data.error_communication & UART_ERRORSRC_BREAK_Msk )
-            {
-                NRF_LOG_ERROR("   Break");
-            }
-            if( p_event->data.error_communication & UART_ERRORSRC_FRAMING_Msk )
-            {
-                NRF_LOG_ERROR("   Framing");
-            }
-            if( p_event->data.error_communication & UART_ERRORSRC_PARITY_Msk )
-            {
-                NRF_LOG_ERROR("   Parity");
-            }
-            if( p_event->data.error_communication & UART_ERRORSRC_OVERRUN_Msk )
-            {
-                NRF_LOG_ERROR("   Overrun");
-            }
+        case NRF_LIBUARTE_ASYNC_EVT_RX_DATA:
+            NRF_LOG_INFO("Received %d bytes from UART", p_evt->data.rxtx.length);
+            // NRF_LOG_INFO("%s", p_evt->data.rxtx.p_data);
             
-            // ### Ignore: APP_ERROR_HANDLER(p_event->data.error_communication);
+            
+            // Workaround to clear current buffer, even if it is not full (timeout reason).
+            // Either this workaround or changing the library libuarte. 
+            // The library only empties buffer when buffer is full.
+            
+            if((message_index + p_evt->data.rxtx.length) <= 244)
+            {
+                uint8_t new_index = message_index+p_evt->data.rxtx.length;
+                for(uint8_t i = message_index; i < new_index; i++)
+                {
+                    message[i] = p_evt->data.rxtx.p_data[i];
+                }                
+                message_index += p_evt->data.rxtx.length;
+                
+                nrf_libuarte_async_rx_free(p_libuarte, p_evt->data.rxtx.p_data, p_evt->data.rxtx.length);
+                // NRF_LOG_INFO("rx_free_cnt = %d", p_libuarte->p_ctrl_blk->rx_free_cnt);
+                
+                if((p_libuarte->p_ctrl_blk->rx_free_cnt != 0) || (message_index >= LIBUARTE_RX_BUFFER_SIZE))
+                {                        
+                    inactivity_timeout = true;
+                }
+                NRF_LOG_INFO("Message index: %d, timeout; %d", message_index, inactivity_timeout);
+            }
+            else
+            {
+                NRF_LOG_ERROR("TODO: add queue when too much data is received.");
+            }
+            bsp_board_led_invert(1);
             break;
-
-        case APP_UART_FIFO_ERROR:
-            APP_ERROR_HANDLER(p_event->data.error_code);
+        case NRF_LIBUARTE_ASYNC_EVT_TX_DONE:    
+            bsp_board_led_invert(2);
+            if (!nrf_queue_is_empty(&m_buf_queue))
+            {
+                NRF_LOG_INFO("TX DONE evevnt queue content");
+                buffer_t buf;
+                ret = nrf_queue_pop(&m_buf_queue, &buf);
+                APP_ERROR_CHECK(ret);
+                UNUSED_RETURN_VALUE(nrf_libuarte_async_tx(p_libuarte, buf.p_data, buf.length));
+            }
             break;
-
         default:
             break;
     }
 }
-/**@snippet [Handling the data received over UART] */
 
 
 /**@brief  Function for initializing the UART module.
@@ -684,29 +640,21 @@ void uart_event_handle(app_uart_evt_t * p_event)
 /**@snippet [UART Initialization] */
 static void uart_init(void)
 {
-    uint32_t                     err_code;
-    app_uart_comm_params_t const comm_params =
-    {
-        .rx_pin_no    = 30,
-        .tx_pin_no    = TX_PIN_NUMBER,
-        .rts_pin_no   = RTS_PIN_NUMBER,
-        .cts_pin_no   = CTS_PIN_NUMBER,
-        .flow_control = APP_UART_FLOW_CONTROL_DISABLED,
-        .use_parity   = false,
-#if defined (UART_PRESENT)
-        .baud_rate    = NRF_UART_BAUDRATE_115200
-#else
-        .baud_rate    = NRF_UARTE_BAUDRATE_115200
-#endif
+    ret_code_t err_code;
+    nrf_libuarte_async_config_t nrf_libuarte_async_config = {
+            .tx_pin     = TX_PIN_NUMBER,
+            .rx_pin     = RX_PIN_NUMBER,
+            .baudrate   = UARTE_BAUDRATE_BAUDRATE_Baud250000,
+            .parity     = NRF_UARTE_PARITY_EXCLUDED,
+            .hwfc       = NRF_UARTE_HWFC_DISABLED,
+            .timeout_us = 100,
+            .int_prio   = APP_IRQ_PRIORITY_LOW
+            // .pullup_rx  = 1;
     };
-
-    APP_UART_FIFO_INIT(&comm_params,
-                       UART_RX_BUF_SIZE,
-                       UART_TX_BUF_SIZE,
-                       uart_event_handle,
-                       APP_IRQ_PRIORITY_LOWEST,
-                       err_code);
+    err_code = nrf_libuarte_async_init(&libuarte, &nrf_libuarte_async_config, uart_event_handler, (void *)&libuarte);
     APP_ERROR_CHECK(err_code);
+    
+    nrf_libuarte_async_enable(&libuarte);
 }
 /**@snippet [UART Initialization] */
 
@@ -807,10 +755,14 @@ static void advertising_start(void)
 int main(void)
 {
     bool erase_bonds;
+    inactivity_timeout = false;
 
     // Initialize.
+    ret_code_t ret = nrf_drv_clock_init();
+    APP_ERROR_CHECK(ret);
+    nrf_drv_clock_lfclk_request(NULL);
     timestamp_timer_config();
-    inactivity_timer_config();
+
     uart_init();
     log_init();
     timers_init();
@@ -826,20 +778,31 @@ int main(void)
     
 
     // Start execution.
-    printf("\r\nBLE UART peripheral started.\r\n");
+    NRF_LOG_INFO("*******************************************************");
     NRF_LOG_INFO("Debug logging for BLE UART peripheral over RTT started.");
     advertising_start();
 
-    app_uart_evt_t uart_timeout;
-    uart_timeout.evt_type = APP_UART_DATA;
-    inactivity_timeout = false;
     // Enter main loop.
+    ret_code_t err_code;
     for (;;)
     {            
         if(inactivity_timeout)
         {
-            uart_event_handle(&uart_timeout);
+            do
+            {
+                NRF_LOG_INFO("Trying to send BLE message, length: %d", message_index);
+                err_code = ble_nus_data_send(&m_nus, message, &message_index, m_conn_handle);
+                if ((err_code != NRF_ERROR_INVALID_STATE) &&
+                    (err_code != NRF_ERROR_RESOURCES) &&
+                    (err_code != NRF_ERROR_NOT_FOUND))
+                {
+                    APP_ERROR_CHECK(err_code);
+                }
+            } while (err_code == NRF_ERROR_RESOURCES);
+            message_index = 0;
+            inactivity_timeout = false;
         }
+        NRF_LOG_FLUSH();
         idle_state_handle();
     }
 }
